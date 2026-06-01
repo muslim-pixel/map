@@ -1,0 +1,1221 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Контрагенты на карте — Маршрут и районы</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { width: 100%; height: 100%; font-family: 'Segoe UI', Roboto, 'Microsoft Sans Serif', sans-serif; }
+        #map { width: 100%; height: 100%; background: #c8e0f0; }
+        
+        #controls {
+            position: absolute; top: 12px; right: 12px; background: rgba(255, 255, 255, 0.98);
+            backdrop-filter: blur(12px); padding: 16px; border-radius: 24px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.15); z-index: 1000;
+            font-size: 13px; width: 440px; max-width: calc(100% - 24px);
+            color: #1a1a2e; border: 1px solid #ddd;
+            max-height: 90vh; overflow-y: auto; transition: all 0.2s;
+        }
+        
+        h3 { margin: 0 0 12px 0; font-size: 1.25rem; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid #e0e0e0; padding-bottom: 8px; color: #2c3e66; }
+        
+        button {
+            background: #f0f2f5; border: 1px solid #ccc; padding: 7px 12px; border-radius: 12px;
+            cursor: pointer; font-weight: 500; transition: all 0.2s; color: #333;
+            font-size: 12px; display: inline-flex; align-items: center; gap: 6px;
+        }
+        button:hover { background: #e4e6e9; transform: translateY(-1px); box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
+        button:active { transform: translateY(0); }
+        
+        .btn-danger { background: #fee2e2; border-color: #f5c6c6; color: #c0392b; }
+        .btn-danger:hover { background: #fccaca; }
+        .btn-success { background: #e3f5e8; border-color: #c3e6cb; color: #2e7d32; }
+        .btn-success:hover { background: #c8e6d9; }
+        .btn-warning { background: #fff3e0; border-color: #ffe0b2; color: #e65100; }
+        .btn-warning:hover { background: #ffe0b2; }
+        .btn-draw { background: #e8e0f5; border-color: #d1c4e9; color: #6a1b9a; }
+        .btn-draw-active { background: #e1bee7; border-color: #ce93d8; box-shadow: 0 0 0 2px #ce93d8; }
+        
+        .csv-upload-btn {
+            background: #e8f0fe; border: 1px dashed #90caf9; text-align: center; border-radius: 16px;
+            padding: 10px 12px; cursor: pointer; margin-bottom: 12px; display: flex; align-items: center;
+            justify-content: center; gap: 10px; font-weight: 600; transition: 0.2s; color: #1565c0;
+        }
+        .csv-upload-btn:hover { background: #d4e4fc; transform: scale(1.01); }
+        .file-input { position: absolute; opacity: 0; width: 0; height: 0; }
+        
+        .stats { font-size: 12px; margin-top: 8px; background: #f5f5f5; padding: 6px 12px; border-radius: 16px; text-align: center; color: #555; }
+        
+        .search-section { margin-top: 12px; margin-bottom: 12px; }
+        .search-box { display: flex; gap: 8px; background: #fff; border: 1px solid #ddd; border-radius: 40px; padding: 4px 8px; align-items: center; }
+        .search-box i { color: #999; margin-left: 8px; }
+        .search-box input { flex: 1; border: none; padding: 8px 0; font-size: 13px; outline: none; background: transparent; }
+        .search-box button { background: #2196F3; color: white; border: none; border-radius: 30px; padding: 6px 14px; margin: 0; }
+        .search-results { background: #f8f9fa; border-radius: 16px; margin-top: 8px; max-height: 200px; overflow-y: auto; display: none; }
+        .search-result-item { padding: 8px 12px; border-bottom: 1px solid #eee; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
+        .search-result-item:hover { background: #e3f2fd; }
+        .search-result-name { font-weight: 500; }
+        .search-result-agent { font-size: 10px; color: #666; }
+        .search-result-select { background: #4CAF50; color: white; border: none; border-radius: 20px; padding: 4px 10px; font-size: 11px; cursor: pointer; }
+        .search-result-select.selected { background: #f44336; }
+        .clear-search { background: none; border: none; color: #999; cursor: pointer; padding: 0 8px; }
+        .clear-search:hover { color: #f44336; }
+        
+        .filter-section { margin-top: 16px; border-top: 1px solid #e0e0e0; padding-top: 12px; }
+        .filter-row { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+        .filter-row label { font-weight: 500; font-size: 12px; }
+        .filter-row select { padding: 6px 10px; border-radius: 12px; border: 1px solid #ccc; background: #fff; font-size: 12px; cursor: pointer; }
+        .filter-row input { padding: 6px 10px; border-radius: 12px; border: 1px solid #ccc; width: 60px; text-align: center; }
+        
+        .agent-list { max-height: 280px; overflow-y: auto; margin: 8px 0; background: #fafafa; border-radius: 16px; padding: 6px; border: 1px solid #eee; }
+        .agent-item { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-radius: 32px; background: #fff; margin: 5px 0; transition: 0.1s; border: 1px solid #eee; }
+        .agent-item:hover { background: #f5f5f5; }
+        .agent-item input { margin-right: 12px; transform: scale(1.15); cursor: pointer; }
+        .agent-item label { flex: 1; cursor: pointer; font-weight: 500; font-size: 12px; color: #333; }
+        .color-dot { width: 14px; height: 14px; border-radius: 50%; display: inline-block; border: 1px solid #ddd; }
+        
+        .selected-panel { background: #f8f9fa; border-radius: 16px; padding: 12px; margin: 14px 0; border: 1px solid #e9ecef; }
+        .point-list { max-height: 140px; overflow-y: auto; margin-top: 8px; }
+        .point-item { background: #fff; margin: 5px 0; padding: 7px 12px; border-radius: 32px; display: flex; justify-content: space-between; align-items: center; font-size: 11px; border: 1px solid #e9ecef; }
+        .route-btn { width: 100%; background: #e3f2fd; border-color: #bbdef5; color: #1565c0; font-size: 14px; padding: 10px; margin-top: 10px; font-weight: bold; }
+        .route-btn:hover { background: #bbdef5; }
+        
+        .note { background: #fff8e1; padding: 8px; border-radius: 16px; font-size: 11px; text-align: center; margin-bottom: 12px; border-left: 3px solid #ffc107; color: #856404; }
+        
+        .route-stats { background: #e8f5e9; border-radius: 16px; padding: 8px 14px; margin-top: 12px; display: flex; justify-content: space-between; align-items: center; }
+        .route-distance { font-weight: bold; font-size: 16px; color: #2e7d32; }
+        
+        .districts-section { margin-top: 12px; padding-top: 8px; border-top: 1px solid #e0e0e0; }
+        .districts-header { display: flex; justify-content: space-between; align-items: center; cursor: pointer; padding: 6px 0; }
+        .districts-header:hover { opacity: 0.8; }
+        .districts-content { transition: max-height 0.3s ease; overflow: hidden; }
+        .districts-content.collapsed { max-height: 0 !important; }
+        .district-list { max-height: 200px; overflow-y: auto; margin: 8px 0; }
+        .district-item { background: #fff; margin: 6px 0; padding: 8px 12px; border-radius: 16px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; transition: 0.1s; border: 1px solid #e0e0e0; }
+        .district-item:hover { background: #f5f5f5; }
+        .district-info { display: flex; align-items: center; gap: 10px; flex: 1; }
+        .district-color { width: 18px; height: 18px; border-radius: 6px; }
+        
+        .backup-buttons { display: flex; gap: 8px; margin: 8px 0; }
+        
+        .custom-tooltip {
+            background: #e8f4f8 !important;
+            color: #1a1a2e !important;
+            font-size: 12px !important;
+            padding: 8px 14px !important;
+            border-radius: 12px !important;
+            border: none !important;
+            font-weight: 500 !important;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15) !important;
+            min-width: 180px;
+            max-width: 280px;
+        }
+        .custom-tooltip::before { border-top-color: #e8f4f8 !important; }
+        .agent-list-in-tooltip { margin-top: 6px; padding-left: 8px; border-left: 2px solid #ffaa44; }
+        .agent-list-in-tooltip span { display: block; font-size: 11px; margin: 3px 0; }
+        
+        .save-indicator { position: fixed; bottom: 24px; right: 24px; background: #2e7d32; color: white; padding: 10px 20px; border-radius: 40px; font-size: 13px; z-index: 1000; opacity: 0; transition: opacity 0.2s; pointer-events: none; font-weight: bold; box-shadow: 0 2px 12px black; }
+        .order-preview-block { background: #e8f5e9; border-radius: 16px; padding: 8px; margin-top: 8px; font-size: 11px; color: #2e7d32; }
+        
+        .edit-mode-active { background: #e91e63 !important; }
+        .vertex-marker { background: white; border: 2px solid #e91e63; border-radius: 50%; width: 10px; height: 10px; cursor: move; }
+        
+        .password-modal {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.5); z-index: 2000; display: flex;
+            align-items: center; justify-content: center;
+        }
+        .password-modal-content {
+            background: white; padding: 24px; border-radius: 24px;
+            text-align: center; min-width: 280px; box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+        }
+        .password-modal-content input { padding: 10px; margin: 15px 0; border-radius: 12px; border: 1px solid #ddd; width: 100%; text-align: center; font-size: 16px; background: #f5f5f5; }
+        .lock-icon { font-size: 48px; margin-bottom: 10px; color: #666; }
+        .agent-count-badge { background: #ffaa44; color: #333; font-size: 10px; font-weight: bold; padding: 2px 6px; border-radius: 20px; margin-left: 8px; }
+        .warehouse-badge { display: none; }
+    </style>
+</head>
+<body>
+<div id="map"></div>
+<div id="controls">
+    <h3><i class="fas fa-map-marked-alt"></i> Маршруты + Районы</h3>
+    <div class="note"><i class="fas fa-mouse-pointer"></i> <strong>Shift + мышь</strong> — выделить область. Наведи на точку — название и список агентов.</div>
+
+    <label for="csvFileInput" class="csv-upload-btn"><i class="fas fa-upload"></i> 📂 Загрузить CSV (Название;Агент;Широта;Долгота)</label>
+    <input type="file" id="csvFileInput" accept=".csv, .txt" class="file-input">
+    
+    <div class="search-section">
+        <div class="search-box">
+            <i class="fas fa-search"></i>
+            <input type="text" id="searchInput" placeholder="Поиск по названию точки..." autocomplete="off">
+            <button id="searchBtn" style="background:#2196F3;"><i class="fas fa-search"></i> Найти</button>
+            <button id="clearSearchBtn" class="clear-search" title="Очистить поиск"><i class="fas fa-times"></i></button>
+        </div>
+        <div id="searchResults" class="search-results"></div>
+    </div>
+    
+    <div style="display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap;">
+        <button id="clearAllBtn" class="btn-danger"><i class="fas fa-trash-alt"></i> Очистить всё</button>
+        <button id="resetFilterBtn" class="btn-secondary"><i class="fas fa-filter"></i> Сброс фильтра</button>
+        <button id="invertSelectionBtn" style="background:#e8e0f5; border-color:#d1c4e9; color:#6a1b9a;"><i class="fas fa-exchange-alt"></i> Инвертировать</button>
+        <button id="showAllPointsBtn" class="btn-warning" style="display:none;"><i class="fas fa-globe"></i> Все точки</button>
+    </div>
+
+    <div class="stats" id="statsInfo">📊 Нет данных. Загрузите CSV или используйте Shift+выделение</div>
+
+    <div id="agentFilterBlock" class="filter-section" style="display: none;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+            <span><i class="fas fa-users"></i> <strong>Фильтр по агентам</strong></span>
+            <button id="selectAllAgentsBtn" style="padding: 4px 10px;">✓ Все</button>
+        </div>
+        <div id="agentListContainer" class="agent-list"></div>
+    </div>
+
+    <div class="filter-section" id="agentCountFilterBlock" style="display: none;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <span><i class="fas fa-layer-group"></i> <strong>Фильтр по количеству агентов в точке</strong></span>
+            <button id="resetAgentCountBtn" style="padding: 2px 8px; font-size: 10px;">Сбросить</button>
+        </div>
+        <div class="filter-row">
+            <label>Показывать точки с количеством агентов:</label>
+            <select id="agentCountOperator">
+                <option value="eq">равно</option>
+                <option value="gte">больше или равно</option>
+                <option value="lte">меньше или равно</option>
+                <option value="gt">больше</option>
+                <option value="lt">меньше</option>
+            </select>
+            <input type="number" id="agentCountValue" value="2" min="1" max="100" step="1">
+            <button id="applyAgentCountFilter">Применить</button>
+        </div>
+        <div id="agentCountStats" style="font-size: 11px; color: #666; margin-top: 5px;"></div>
+    </div>
+
+    <div class="districts-section">
+        <div class="districts-header" id="districtsToggle">
+            <span><i class="fas fa-draw-polygon"></i> <strong>Районы</strong> <span id="editBadge" style="font-size:10px; color:#e65100;"></span></span>
+            <span><i class="fas fa-chevron-up" id="districtsChevron"></i></span>
+        </div>
+        <div id="districtsContent" class="districts-content collapsed">
+            <button id="drawPolygonBtn" class="btn-draw" style="width:100%; margin-top: 8px;"><i class="fas fa-plus-circle"></i> Новый район</button>
+            <div id="drawStatus" style="font-size: 11px; color: #e65100; margin: 6px 0;"></div>
+            <div id="districtList" class="district-list"></div>
+            <div class="backup-buttons">
+                <button id="exportBtn" class="btn-success" style="flex:1;"><i class="fas fa-save"></i> Сохранить районы</button>
+                <label for="importFileInput" style="background:#f0f2f5; border:1px solid #ccc; flex:1; text-align:center; border-radius:12px; padding:7px 10px; cursor:pointer;"><i class="fas fa-folder-open"></i> Загрузить районы</label>
+                <input type="file" id="importFileInput" accept=".json" class="file-input">
+            </div>
+        </div>
+    </div>
+
+    <div class="selected-panel">
+        <div><span><i class="fas fa-check-circle"></i> Выбрано точек:</span> <strong id="selectedCount">0</strong></div>
+        <div id="selectedPointsList" class="point-list"></div>
+        <button id="clearSelectionBtn" class="btn-danger" style="width:100%; margin-top: 8px;"><i class="fas fa-ban"></i> Очистить выбор</button>
+    </div>
+
+    <button id="buildRouteBtn" class="route-btn"><i class="fas fa-route"></i> 🚀 Построить оптимальный маршрут</button>
+    <div id="routeDistancePanel" class="route-stats" style="display: none;">
+        <span>📏 Общая длина:</span>
+        <span class="route-distance" id="routeDistanceValue">0 км</span>
+    </div>
+    <div id="routeStatus" style="font-size: 11px; margin-top: 8px; text-align: center; color: #666;"></div>
+</div>
+<div id="saveIndicator" class="save-indicator">✅ Сохранено</div>
+
+<script>
+    (function() {
+        const WAREHOUSE = { lat: 43.030270, lon: 47.417995 };
+        const STORAGE_KEY = 'map_districts';
+        const DISTRICT_PASSWORD = '12345';
+        
+        let map;
+        let allPoints = [];
+        let selectedPointIds = new Set();
+        let optimizedOrderIds = [];
+        let agentFilterSet = new Set();
+        let agentColorMap = {};
+        let markersLayer = [];
+        let routePolyline = null;
+        let showOnlySelectedMode = false;
+        let districtsUnlocked = false;
+        
+        let agentCountFilterActive = false;
+        let agentCountOperator = 'gte';
+        let agentCountValue = 2;
+        
+        let pointsCountCache = new Map();
+        
+        let districts = [];
+        let districtLayers = [];
+        let districtLabels = [];
+        let nextDistrictId = 1;
+        let editingDistrictId = null;
+        let editingMarkers = [];
+        
+        let drawMode = null;
+        let drawingPoints = [];
+        let drawingLayer = null;
+        
+        let rectStart = null, rectLayer = null, rectDrawing = false;
+        
+        let currentSearchResults = [];
+        let searchMarker = null;
+        
+        const DISTRICT_COLORS = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD', '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E2', '#FF9F4A', '#6AAB9E'];
+        const AGENT_PALETTE = ['#E76F51', '#F4A261', '#E9C46A', '#6A994E', '#A7C957', '#BC4A6C', '#4682B4', '#D96C6C', '#6C9EBF', '#B5838D', '#2A9D8F', '#E63946'];
+        
+        let districtsCollapsed = true;
+        
+        // -------------------- Поиск --------------------
+        function searchPoints(query) {
+            if (!query || query.trim() === '') {
+                hideSearchResults();
+                return [];
+            }
+            const lowerQuery = query.toLowerCase();
+            const results = allPoints.filter(point => 
+                point.name.toLowerCase().includes(lowerQuery) ||
+                point.agent.toLowerCase().includes(lowerQuery)
+            );
+            displaySearchResults(results);
+            return results;
+        }
+        
+        function displaySearchResults(results) {
+            const container = document.getElementById('searchResults');
+            if (results.length === 0) {
+                container.innerHTML = '<div style="padding: 12px; text-align: center; color: #999;">Ничего не найдено</div>';
+                container.style.display = 'block';
+                return;
+            }
+            let html = '';
+            results.forEach(point => {
+                const isSelected = selectedPointIds.has(point.id);
+                html += `
+                    <div class="search-result-item">
+                        <div>
+                            <div class="search-result-name">${escapeHtml(point.name)}</div>
+                            <div class="search-result-agent">👤 ${escapeHtml(point.agent)}</div>
+                        </div>
+                        <button class="search-result-select ${isSelected ? 'selected' : ''}" onclick="window.selectSearchResult('${point.id}')">
+                            ${isSelected ? '✓ Выбрана' : '+ Выбрать'}
+                        </button>
+                    </div>
+                `;
+            });
+            container.innerHTML = html;
+            container.style.display = 'block';
+            currentSearchResults = results;
+        }
+        
+        window.selectSearchResult = function(pointId) {
+            const point = allPoints.find(p => p.id === pointId);
+            if (!point) return;
+            if (selectedPointIds.has(pointId)) {
+                selectedPointIds.delete(pointId);
+                showToast(`❌ Удалено: ${point.name}`, '#f44336', 1200);
+            } else {
+                selectedPointIds.add(pointId);
+                showToast(`✅ Добавлено: ${point.name}`, '#4CAF50', 1200);
+            }
+            optimizedOrderIds = [];
+            if (routePolyline) map.removeLayer(routePolyline);
+            document.getElementById('routeDistancePanel').style.display = 'none';
+            const preview = document.getElementById('orderPreviewDynamic');
+            if (preview) preview.remove();
+            if (showOnlySelectedMode && selectedPointIds.size === 0) { 
+                showOnlySelectedMode = false; 
+                document.getElementById('showAllPointsBtn').style.display = 'none'; 
+            }
+            redrawMarkers();
+            const searchInput = document.getElementById('searchInput');
+            if (searchInput.value.trim()) {
+                searchPoints(searchInput.value);
+            }
+            map.setView([point.lat, point.lon], 15);
+            if (searchMarker) map.removeLayer(searchMarker);
+            searchMarker = L.marker([point.lat, point.lon], {
+                icon: L.divIcon({ 
+                    html: '<div style="background:#FF9800; width:24px; height:24px; border-radius:50%; border:2px solid white; box-shadow:0 0 10px rgba(0,0,0,0.5);"></div>',
+                    iconSize: [24, 24]
+                })
+            }).addTo(map).bindPopup(`<b>${escapeHtml(point.name)}</b><br>👤 ${escapeHtml(point.agent)}`, { autoClose: false, closeOnClick: false });
+            setTimeout(() => { if (searchMarker) map.removeLayer(searchMarker); }, 3000);
+        };
+        
+        function hideSearchResults() {
+            const container = document.getElementById('searchResults');
+            container.style.display = 'none';
+            container.innerHTML = '';
+            if (searchMarker) { map.removeLayer(searchMarker); searchMarker = null; }
+        }
+        
+        function clearSearch() { document.getElementById('searchInput').value = ''; hideSearchResults(); }
+        
+        // -------------------- Районы и пароли --------------------
+        function toggleDistricts() {
+            if (!districtsUnlocked) {
+                askPasswordForDistricts((success) => {
+                    if (success) { districtsUnlocked = true; actuallyToggleDistricts(); }
+                });
+            } else { actuallyToggleDistricts(); }
+        }
+        
+        function actuallyToggleDistricts() {
+            districtsCollapsed = !districtsCollapsed;
+            const content = document.getElementById('districtsContent');
+            const chevron = document.getElementById('districtsChevron');
+            if (districtsCollapsed) {
+                content.classList.add('collapsed');
+                chevron.className = 'fas fa-chevron-up';
+            } else {
+                content.classList.remove('collapsed');
+                chevron.className = 'fas fa-chevron-down';
+            }
+        }
+        
+        function askPasswordForDistricts(callback) {
+            const modal = document.createElement('div');
+            modal.className = 'password-modal';
+            modal.innerHTML = `
+                <div class="password-modal-content">
+                    <div class="lock-icon"><i class="fas fa-lock"></i></div>
+                    <h3>Доступ к районам</h3>
+                    <p>Введите пароль для доступа к редактированию</p>
+                    <input type="password" id="passwordInput" placeholder="Пароль" autocomplete="off">
+                    <div style="display: flex; gap: 10px; margin-top: 15px;">
+                        <button id="passwordOk" class="btn-success" style="flex:1;">ОК</button>
+                        <button id="passwordCancel" class="btn-secondary" style="flex:1;">Отмена</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+            const input = modal.querySelector('#passwordInput');
+            input.focus();
+            modal.querySelector('#passwordOk').onclick = () => {
+                if (input.value === DISTRICT_PASSWORD) { modal.remove(); callback(true); }
+                else { alert('Неверный пароль!'); modal.remove(); callback(false); }
+            };
+            modal.querySelector('#passwordCancel').onclick = () => { modal.remove(); callback(false); };
+            input.onkeypress = (e) => { if (e.key === 'Enter') modal.querySelector('#passwordOk').click(); };
+        }
+        
+        function askPasswordForAction(actionName, callback) {
+            const modal = document.createElement('div');
+            modal.className = 'password-modal';
+            modal.innerHTML = `
+                <div class="password-modal-content">
+                    <div class="lock-icon"><i class="fas fa-lock"></i></div>
+                    <h3>Подтверждение</h3>
+                    <p>Введите пароль для ${actionName}</p>
+                    <input type="password" id="passwordInput" placeholder="Пароль" autocomplete="off">
+                    <div style="display: flex; gap: 10px; margin-top: 15px;">
+                        <button id="passwordOk" class="btn-success" style="flex:1;">ОК</button>
+                        <button id="passwordCancel" class="btn-secondary" style="flex:1;">Отмена</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+            const input = modal.querySelector('#passwordInput');
+            input.focus();
+            modal.querySelector('#passwordOk').onclick = () => {
+                if (input.value === DISTRICT_PASSWORD) { modal.remove(); callback(true); }
+                else { alert('Неверный пароль!'); modal.remove(); callback(false); }
+            };
+            modal.querySelector('#passwordCancel').onclick = () => { modal.remove(); callback(false); };
+            input.onkeypress = (e) => { if (e.key === 'Enter') modal.querySelector('#passwordOk').click(); };
+        }
+        
+        // -------------------- Карта и основные функции --------------------
+        function initMap() {
+            map = L.map('map').setView([WAREHOUSE.lat, WAREHOUSE.lon], 12);
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+                attribution: '&copy; OSM',
+                subdomains: 'abcd',
+                maxZoom: 18
+            }).addTo(map);
+            const warehouseIcon = L.divIcon({ 
+                html: '<div style="background:#FF9800; width:36px; height:36px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:20px; box-shadow:0 2px 5px rgba(0,0,0,0.2);">🏭</div>', 
+                iconSize: [36,36] 
+            });
+            L.marker([WAREHOUSE.lat, WAREHOUSE.lon], { icon: warehouseIcon })
+                .bindTooltip('<b>СКЛАД</b><br>Старт маршрута', { sticky: true, className: 'custom-tooltip' })
+                .addTo(map);
+            map.on('click', onMapClick);
+            map.on('mousemove', onMapMove);
+            setupRectangleSelection();
+            loadDistrictsFromStorage();
+            document.getElementById('districtsToggle').onclick = toggleDistricts;
+        }
+        
+        function setupRectangleSelection() {
+            map.on('mousedown', function(e) {
+                if (e.originalEvent.shiftKey && !drawMode && !editingDistrictId) {
+                    rectDrawing = true;
+                    rectStart = e.latlng;
+                    map.dragging.disable();
+                }
+            });
+            map.on('mousemove', function(e) {
+                if (rectDrawing && rectStart) {
+                    if (rectLayer) map.removeLayer(rectLayer);
+                    rectLayer = L.rectangle(L.latLngBounds(rectStart, e.latlng), { color: '#ffaa44', weight: 2, fillOpacity: 0.15 }).addTo(map);
+                }
+            });
+            map.on('mouseup', function(e) {
+                if (rectDrawing && rectStart && rectLayer) {
+                    const bounds = rectLayer.getBounds();
+                    let targets = getFilteredPointsForDisplay();
+                    let count = 0;
+                    targets.forEach(p => {
+                        if (bounds.contains(L.latLng(p.lat, p.lon))) { selectedPointIds.add(p.id); count++; }
+                    });
+                    if (count) {
+                        optimizedOrderIds = [];
+                        if (routePolyline) map.removeLayer(routePolyline);
+                        document.getElementById('routeDistancePanel').style.display = 'none';
+                        const preview = document.getElementById('orderPreviewDynamic');
+                        if (preview) preview.remove();
+                        redrawMarkers();
+                        showToast(`✅ Добавлено ${count} точек`, '#2e7d32');
+                    }
+                    map.removeLayer(rectLayer);
+                    rectLayer = null;
+                    rectDrawing = false;
+                    rectStart = null;
+                    map.dragging.enable();
+                } else {
+                    if (rectLayer) { map.removeLayer(rectLayer); rectLayer = null; }
+                    rectDrawing = false;
+                    rectStart = null;
+                    map.dragging.enable();
+                }
+            });
+        }
+        
+        function showToast(msg, bg = '#2e7d32', duration = 1800) {
+            const el = document.getElementById('saveIndicator');
+            el.style.background = bg;
+            el.innerHTML = msg;
+            el.style.opacity = '1';
+            setTimeout(() => { el.style.opacity = '0'; }, duration);
+        }
+        
+        function onMapClick(e) {
+            if (drawMode === 'polygon' && !editingDistrictId && districtsUnlocked) {
+                drawingPoints.push(e.latlng);
+                updateDrawingPreview();
+                document.getElementById('drawStatus').innerHTML = `🔺 ${drawingPoints.length} точек. Дважды кликните для завершения.`;
+            }
+        }
+        
+        function onMapMove(e) {
+            if (drawMode === 'polygon' && drawingPoints.length && !drawingLayer && !editingDistrictId && districtsUnlocked) {
+                if (drawingLayer) map.removeLayer(drawingLayer);
+                const pts = [...drawingPoints, e.latlng];
+                drawingLayer = L.polyline(pts, { color: '#9c27b0', weight: 3, dashArray: '6,6' }).addTo(map);
+            } else if (drawingLayer && drawMode === 'polygon') {
+                const pts = [...drawingPoints, e.latlng];
+                drawingLayer.setLatLngs(pts);
+            }
+        }
+        
+        function updateDrawingPreview() {
+            if (drawingLayer) map.removeLayer(drawingLayer);
+            if (drawingPoints.length > 0) {
+                drawingLayer = L.polyline(drawingPoints, { color: '#9c27b0', weight: 3, dashArray: '6,6' }).addTo(map);
+            }
+        }
+        
+        function finishDrawing(latlngs) {
+            if (latlngs.length < 3) { alert("Нужно минимум 3 точки"); cancelDrawing(); return; }
+            const name = prompt('Введите название района:', 'Район ' + (districts.length + 1));
+            if (!name) { cancelDrawing(); return; }
+            const color = DISTRICT_COLORS[districts.length % DISTRICT_COLORS.length];
+            districts.push({ id: nextDistrictId++, name, color, latlngs });
+            renderDistricts();
+            saveDistrictsToStorage();
+            cancelDrawing();
+            showToast(`🏞️ Район "${name}" создан`);
+        }
+        
+        function cancelDrawing() {
+            drawMode = null;
+            drawingPoints = [];
+            if (drawingLayer) { map.removeLayer(drawingLayer); drawingLayer = null; }
+            document.getElementById('drawPolygonBtn').classList.remove('btn-draw-active');
+            document.getElementById('drawStatus').innerHTML = '';
+            map.off('dblclick');
+        }
+        
+        function startDrawMode() {
+            if (!districtsUnlocked) {
+                askPasswordForAction('создания района', (success) => {
+                    if (success) { districtsUnlocked = true; actuallyStartDrawMode(); }
+                });
+            } else { actuallyStartDrawMode(); }
+        }
+        
+        function actuallyStartDrawMode() {
+            if (editingDistrictId) cancelEditing();
+            cancelDrawing();
+            drawMode = 'polygon';
+            document.getElementById('drawPolygonBtn').classList.add('btn-draw-active');
+            document.getElementById('drawStatus').innerHTML = '🟨 Кликайте для углов. Двойной клик — завершить.';
+            map.on('dblclick', () => {
+                if (drawingPoints.length >= 3) finishDrawing(drawingPoints.map(p => [p.lat, p.lng]));
+                else if (drawingPoints.length > 0) alert('Нужно минимум 3 точки');
+                else cancelDrawing();
+            });
+        }
+        
+        function editDistrict(id) {
+            if (!districtsUnlocked) {
+                askPasswordForAction('редактирования района', (success) => {
+                    if (success) { districtsUnlocked = true; actuallyEditDistrict(id); }
+                });
+            } else { actuallyEditDistrict(id); }
+        }
+        
+        function actuallyEditDistrict(id) {
+            cancelDrawing();
+            if (editingDistrictId) cancelEditing();
+            const district = districts.find(d => d.id === id);
+            if (!district) return;
+            editingDistrictId = id;
+            document.getElementById('editBadge').innerHTML = `✏️ редактируется: ${district.name}`;
+            const editPoly = L.polygon(district.latlngs, { color: '#e91e63', weight: 4, fillOpacity: 0.15 }).addTo(map);
+            editingMarkers.push(editPoly);
+            district.latlngs.forEach((latlng, idx) => {
+                const marker = L.marker([latlng[0], latlng[1]], {
+                    draggable: true,
+                    icon: L.divIcon({ html: '<div style="background:#e91e63; width:12px; height:12px; border-radius:50%; border:2px solid white; box-shadow:0 0 5px rgba(0,0,0,0.3);"></div>', iconSize: [12,12] })
+                }).addTo(map);
+                marker.on('drag', function(e) {
+                    const newPos = e.target.getLatLng();
+                    district.latlngs[idx] = [newPos.lat, newPos.lng];
+                    editPoly.setLatLngs([district.latlngs]);
+                });
+                editingMarkers.push(marker);
+            });
+            const saveBtn = document.createElement('button');
+            saveBtn.innerHTML = '<i class="fas fa-save"></i> Сохранить район';
+            saveBtn.className = 'btn-success';
+            saveBtn.style.position = 'fixed'; saveBtn.style.bottom = '100px'; saveBtn.style.right = '470px'; saveBtn.style.zIndex = '1001';
+            saveBtn.onclick = () => { saveDistrictEdit(id, editPoly); };
+            const cancelBtn = document.createElement('button');
+            cancelBtn.innerHTML = '<i class="fas fa-times"></i> Отменить';
+            cancelBtn.className = 'btn-secondary';
+            cancelBtn.style.position = 'fixed'; cancelBtn.style.bottom = '100px'; cancelBtn.style.right = '330px'; cancelBtn.style.zIndex = '1001';
+            cancelBtn.onclick = () => cancelEditing();
+            document.body.appendChild(saveBtn);
+            document.body.appendChild(cancelBtn);
+            editingMarkers.push(saveBtn, cancelBtn);
+        }
+        
+        function saveDistrictEdit(id, editPoly) {
+            const district = districts.find(d => d.id === id);
+            if (district && editPoly) {
+                const newLatlngs = editPoly.getLatLngs()[0];
+                district.latlngs = newLatlngs.map(ll => [ll.lat, ll.lng]);
+                renderDistricts();
+                saveDistrictsToStorage();
+                showToast(`🏞️ Район "${district.name}" обновлён`);
+            }
+            cancelEditing();
+        }
+        
+        function cancelEditing() {
+            editingMarkers.forEach(m => { if (m.remove) m.remove(); else if (m.removeFrom) m.removeFrom(map); });
+            editingMarkers = [];
+            editingDistrictId = null;
+            document.getElementById('editBadge').innerHTML = '';
+            const extras = document.querySelectorAll('button[style*="fixed"][style*="bottom"]');
+            extras.forEach(b => b.remove());
+        }
+        
+        function renderDistricts() {
+            districtLayers.forEach(l => map.removeLayer(l));
+            districtLabels.forEach(l => map.removeLayer(l));
+            districtLayers = []; districtLabels = [];
+            districts.forEach(d => {
+                const layer = L.polygon(d.latlngs, { color: d.color, weight: 2, fillColor: d.color, fillOpacity: 0.25 })
+                    .bindPopup(`<b>${escapeHtml(d.name)}</b><br><button onclick="editDistrict(${d.id})" style="background:#ff9800; margin-top:4px; padding:3px 8px; border:none; border-radius:8px; color:white; cursor:pointer;">✏️ Редактировать</button> <button onclick="deleteDistrict(${d.id})" style="background:#dc3545; margin-top:4px; padding:3px 8px; border:none; border-radius:8px; color:white; cursor:pointer;">🗑️ Удалить</button>`);
+                layer.addTo(map);
+                districtLayers.push(layer);
+                const center = L.latLngBounds(d.latlngs).getCenter();
+                const label = L.marker(center, { icon: L.divIcon({ html: `<div style="background:${d.color}; color:white; padding:3px 12px; border-radius:30px; font-size:11px; font-weight:bold; border:1px solid white; box-shadow:0 1px 3px rgba(0,0,0,0.2);">${escapeHtml(d.name)}</div>`, iconSize: [null, null] }) }).addTo(map);
+                districtLabels.push(label);
+            });
+            updateDistrictListUI();
+        }
+        
+        function updateDistrictListUI() {
+            const container = document.getElementById('districtList');
+            if (!districts.length) { container.innerHTML = '<div style="text-align:center; padding:10px; color:#999;">Нет районов. Нажмите "Новый район"</div>'; return; }
+            let html = '';
+            districts.forEach(d => {
+                html += `<div class="district-item" ondblclick="editDistrict(${d.id})">
+                            <div class="district-info">
+                                <div class="district-color" style="background:${d.color};"></div>
+                                <span><b>${escapeHtml(d.name)}</b> (${d.latlngs.length} точек)</span>
+                            </div>
+                            <div>
+                                <button onclick="editDistrict(${d.id})" style="background:#ff9800; padding:4px 10px; border:none; border-radius:12px; color:white; cursor:pointer;"><i class="fas fa-edit"></i></button>
+                                <button onclick="deleteDistrict(${d.id})" style="background:#dc3545; padding:4px 10px; border:none; border-radius:12px; color:white; cursor:pointer;"><i class="fas fa-trash"></i></button>
+                            </div>
+                        </div>`;
+            });
+            container.innerHTML = html;
+        }
+        
+        window.editDistrict = editDistrict;
+        window.deleteDistrict = function(id) {
+            if (!districtsUnlocked) {
+                askPasswordForAction('удаления района', (success) => {
+                    if (success) { districtsUnlocked = true; actuallyDeleteDistrict(id); }
+                });
+            } else { actuallyDeleteDistrict(id); }
+        };
+        
+        function actuallyDeleteDistrict(id) {
+            if (editingDistrictId === id) cancelEditing();
+            districts = districts.filter(d => d.id !== id);
+            renderDistricts();
+            saveDistrictsToStorage();
+            showToast('🗑️ Район удалён', '#c0392b');
+        }
+        
+        function saveDistrictsToStorage() { localStorage.setItem(STORAGE_KEY, JSON.stringify(districts.map(d => ({ id: d.id, name: d.name, color: d.color, latlngs: d.latlngs })))); }
+        function loadDistrictsFromStorage() {
+            const saved = localStorage.getItem(STORAGE_KEY);
+            if (saved) {
+                try {
+                    districts = JSON.parse(saved);
+                    if (districts.length) nextDistrictId = Math.max(...districts.map(d => d.id)) + 1;
+                    renderDistricts();
+                } catch(e) { console.warn(e); }
+            }
+        }
+        
+        function exportDistricts() {
+            if (!districtsUnlocked) {
+                askPasswordForAction('экспорта районов', (success) => {
+                    if (success) { districtsUnlocked = true; actuallyExportDistricts(); }
+                });
+            } else { actuallyExportDistricts(); }
+        }
+        
+        function actuallyExportDistricts() {
+            const data = { districts: districts.map(d => ({ name: d.name, color: d.color, latlngs: d.latlngs })), date: new Date().toISOString() };
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = `districts_${new Date().toISOString().slice(0,19)}.json`;
+            a.click();
+            URL.revokeObjectURL(a.href);
+            showToast('📁 Районы сохранены в файл');
+        }
+        
+        function importDistricts(file) {
+            if (!districtsUnlocked) {
+                askPasswordForAction('импорта районов', (success) => {
+                    if (success) { districtsUnlocked = true; actuallyImportDistricts(file); }
+                });
+            } else { actuallyImportDistricts(file); }
+        }
+        
+        function actuallyImportDistricts(file) {
+            const reader = new FileReader();
+            reader.onload = e => {
+                try {
+                    const data = JSON.parse(e.target.result);
+                    if (data.districts) {
+                        districts = data.districts.map((d, idx) => ({ id: idx + 1, name: d.name, color: d.color || DISTRICT_COLORS[idx % DISTRICT_COLORS.length], latlngs: d.latlngs }));
+                        nextDistrictId = districts.length + 1;
+                        renderDistricts();
+                        saveDistrictsToStorage();
+                        showToast('✅ Районы загружены');
+                    } else alert('Неверный формат');
+                } catch(err) { alert('Ошибка файла'); }
+            };
+            reader.readAsText(file);
+        }
+        
+        // -------------------- Гео-функции (с секторными маркерами) --------------------
+        function getAgentColor(agent) {
+            if (!agentColorMap[agent]) agentColorMap[agent] = AGENT_PALETTE[Object.keys(agentColorMap).length % AGENT_PALETTE.length];
+            return agentColorMap[agent];
+        }
+        
+        function haversineKm(lat1, lon1, lat2, lon2) {
+            const R = 6371;
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) * Math.sin(dLon/2)**2;
+            return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        }
+        
+        function getPointsAtLocation(lat, lon) {
+            return allPoints.filter(p => Math.abs(p.lat - lat) < 0.000001 && Math.abs(p.lon - lon) < 0.000001);
+        }
+        
+        function getAgentCountAtLocation(lat, lon) {
+            const key = `${lat.toFixed(6)},${lon.toFixed(6)}`;
+            if (pointsCountCache.has(key)) return pointsCountCache.get(key);
+            const points = getPointsAtLocation(lat, lon);
+            const uniqueAgents = new Set();
+            points.forEach(p => uniqueAgents.add(p.agent));
+            const count = uniqueAgents.size;
+            pointsCountCache.set(key, count);
+            return count;
+        }
+        
+        function passesAgentCountFilter(point) {
+            if (!agentCountFilterActive) return true;
+            const count = getAgentCountAtLocation(point.lat, point.lon);
+            switch (agentCountOperator) {
+                case 'eq': return count === agentCountValue;
+                case 'gte': return count >= agentCountValue;
+                case 'lte': return count <= agentCountValue;
+                case 'gt': return count > agentCountValue;
+                case 'lt': return count < agentCountValue;
+                default: return true;
+            }
+        }
+        
+        function getFilteredPointsForDisplay() {
+            let points = allPoints;
+            if (agentFilterSet.size > 0) points = points.filter(p => agentFilterSet.has(p.agent));
+            if (agentCountFilterActive) points = points.filter(p => passesAgentCountFilter(p));
+            return points;
+        }
+        
+        function getTooltipContent(point) {
+            const pointsAtLocation = getPointsAtLocation(point.lat, point.lon);
+            const uniqueAgents = new Map();
+            pointsAtLocation.forEach(p => {
+                if (!uniqueAgents.has(p.agent)) uniqueAgents.set(p.agent, p);
+            });
+            const agentCount = uniqueAgents.size;
+            const orderNum = (optimizedOrderIds.length ? optimizedOrderIds.indexOf(point.id) + 1 : null);
+            
+            if (agentCount === 1) {
+                const agent = Array.from(uniqueAgents.keys())[0];
+                const p = uniqueAgents.get(agent);
+                return `<b>${escapeHtml(p.name)}</b><br>👤 Агент: ${escapeHtml(agent)}${orderNum ? `<br>📍 №${orderNum}` : ''}`;
+            } else {
+                let html = `<b>${escapeHtml(pointsAtLocation[0].name)}</b> <span class="agent-count-badge">${agentCount} договора</span><br>`;
+                html += `<div class="agent-list-in-tooltip"><span style="font-size: 11px;">👥 Агенты:</span>`;
+                let idx = 1;
+                for (let [agent, p] of uniqueAgents.entries()) {
+                    const pOrderNum = (optimizedOrderIds.length ? optimizedOrderIds.indexOf(p.id) + 1 : null);
+                    html += `<span>${idx++}. ${escapeHtml(agent)}${pOrderNum ? ` <span style="color:#ffaa44;">(№${pOrderNum})</span>` : ''}</span>`;
+                }
+                html += `</div>`;
+                return html;
+            }
+        }
+        
+        // Создание маркера-«пирога» для точки с несколькими агентами
+        function createPieIcon(agentColorsList, size = 36) {
+            const canvas = document.createElement('canvas');
+            canvas.width = size;
+            canvas.height = size;
+            const ctx = canvas.getContext('2d');
+            const center = size / 2;
+            const radius = size / 2 - 1;
+            const count = agentColorsList.length;
+            
+            if (count === 0) return null;
+            
+            // Рисуем сектора
+            for (let i = 0; i < count; i++) {
+                const startAngle = (i * 2 * Math.PI) / count;
+                const endAngle = ((i + 1) * 2 * Math.PI) / count;
+                ctx.beginPath();
+                ctx.moveTo(center, center);
+                ctx.arc(center, center, radius, startAngle, endAngle);
+                ctx.closePath();
+                ctx.fillStyle = agentColorsList[i];
+                ctx.fill();
+                ctx.strokeStyle = 'white';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+            }
+            // Рисуем белую обводку по кругу
+            ctx.beginPath();
+            ctx.arc(center, center, radius, 0, 2 * Math.PI);
+            ctx.strokeStyle = 'white';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            // Маленький кружок с количеством агентов в центре
+            if (count > 0) {
+                const innerRadius = radius * 0.35;
+                ctx.beginPath();
+                ctx.arc(center, center, innerRadius, 0, 2 * Math.PI);
+                ctx.fillStyle = '#ffffff';
+                ctx.fill();
+                ctx.fillStyle = '#333333';
+                ctx.font = `bold ${Math.floor(size * 0.3)}px "Segoe UI"`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(count.toString(), center, center);
+            }
+            return canvas.toDataURL();
+        }
+        
+        // Создание маркера для точки (основная функция)
+        function createMarkerForPoint(point, isSelected, orderNum, color, agentCount) {
+            // Если точка выбрана — используем стандартный стиль (синий с номером или галочка)
+            if (isSelected) {
+                let iconHtml;
+                if (orderNum) {
+                    iconHtml = `<div style="background:#2c3e66; width:36px; height:36px; border-radius:50%; border:3px solid #ffc107; display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:16px; color:white; box-shadow:0 2px 4px rgba(0,0,0,0.2);">${orderNum}</div>`;
+                } else {
+                    iconHtml = `<div style="background:#2c3e66; width:32px; height:32px; border-radius:50%; border:2px solid #2e7d32; display:flex; align-items:center; justify-content:center; font-size:16px; color:white; box-shadow:0 2px 4px rgba(0,0,0,0.2);">✓</div>`;
+                }
+                const icon = L.divIcon({ html: iconHtml, iconSize: [36,36], popupAnchor: [0, -14], className: 'selected-marker' });
+                const marker = L.marker([point.lat, point.lon], { icon })
+                    .bindPopup(getTooltipContent(point) + `<br><button onclick="toggleSinglePointSelection('${point.id}')" style="margin-top:5px; background:#dc3545; border:none; border-radius:20px; padding:4px 12px; color:white; cursor:pointer;">✖ Убрать</button>`)
+                    .bindTooltip(getTooltipContent(point), { sticky: true, className: 'custom-tooltip', offset: [0, -18], direction: 'top' });
+                return marker;
+            }
+            
+            // Не выбранная точка: если несколько агентов — рисуем пирог
+            if (agentCount >= 2) {
+                // Получаем уникальные цвета агентов для этой точки
+                const pointsAtLocation = getPointsAtLocation(point.lat, point.lon);
+                const uniqueAgentsMap = new Map();
+                pointsAtLocation.forEach(p => {
+                    if (!uniqueAgentsMap.has(p.agent)) uniqueAgentsMap.set(p.agent, p);
+                });
+                const agentColorsList = [];
+                for (let agent of uniqueAgentsMap.keys()) {
+                    agentColorsList.push(getAgentColor(agent));
+                }
+                const imgData = createPieIcon(agentColorsList, 36);
+                if (imgData) {
+                    const icon = L.divIcon({
+                        html: `<div style="background-image: url(${imgData}); width:36px; height:36px; background-size: cover; border-radius:50%; box-shadow:0 2px 5px rgba(0,0,0,0.2);"></div>`,
+                        iconSize: [36,36],
+                        popupAnchor: [0, -14],
+                        className: 'pie-marker'
+                    });
+                    const marker = L.marker([point.lat, point.lon], { icon })
+                        .bindPopup(getTooltipContent(point) + `<br><button onclick="toggleSinglePointSelection('${point.id}')" style="margin-top:5px; background:#2e7d32; border:none; border-radius:20px; padding:4px 12px; color:white; cursor:pointer;">➕ Добавить</button>`)
+                        .bindTooltip(getTooltipContent(point), { sticky: true, className: 'custom-tooltip', offset: [0, -18], direction: 'top' });
+                    return marker;
+                }
+            }
+            
+            // Один агент – обычный цветной кружок
+            const iconHtml = `<div style="background:${color}; width:26px; height:26px; border-radius:50%; border:2px solid white; box-shadow:0 1px 3px rgba(0,0,0,0.2);"></div>`;
+            const icon = L.divIcon({ html: iconHtml, iconSize: [26,26], popupAnchor: [0, -13] });
+            const marker = L.marker([point.lat, point.lon], { icon })
+                .bindPopup(getTooltipContent(point) + `<br><button onclick="toggleSinglePointSelection('${point.id}')" style="margin-top:5px; background:#2e7d32; border:none; border-radius:20px; padding:4px 12px; color:white; cursor:pointer;">➕ Добавить</button>`)
+                .bindTooltip(getTooltipContent(point), { sticky: true, className: 'custom-tooltip', offset: [0, -18], direction: 'top' });
+            return marker;
+        }
+        
+        function updateAgentCountStats() {
+            if (!agentCountFilterActive) { document.getElementById('agentCountStats').innerHTML = ''; return; }
+            const points = allPoints.filter(p => passesAgentCountFilter(p));
+            const uniqueCoords = new Set();
+            points.forEach(p => { const key = `${p.lat.toFixed(6)},${p.lon.toFixed(6)}`; uniqueCoords.add(key); });
+            const operatorText = { 'eq':'равно', 'gte':'больше или равно', 'lte':'меньше или равно', 'gt':'больше', 'lt':'меньше' };
+            document.getElementById('agentCountStats').innerHTML = `📊 Показано ${uniqueCoords.size} уникальных адресов (${points.length} точек) с количеством агентов ${operatorText[agentCountOperator]} ${agentCountValue}`;
+        }
+        
+        function redrawMarkers() {
+            markersLayer.forEach(m => map.removeLayer(m));
+            markersLayer = [];
+            const pointsToRender = showOnlySelectedMode ? allPoints.filter(p => selectedPointIds.has(p.id)) : getFilteredPointsForDisplay();
+            document.getElementById('statsInfo').innerHTML = showOnlySelectedMode ? 
+                `📍 Режим маршрута: ${pointsToRender.length}/${allPoints.length} точек` : 
+                `📍 Отображается: ${pointsToRender.length} точек из ${allPoints.length}`;
+            const orderMap = new Map();
+            if (optimizedOrderIds.length) optimizedOrderIds.forEach((id, idx) => orderMap.set(id, idx + 1));
+            const processedCoords = new Map();
+            for (let point of pointsToRender) {
+                const coordKey = `${point.lat.toFixed(6)},${point.lon.toFixed(6)}`;
+                if (processedCoords.has(coordKey)) continue;
+                processedCoords.set(coordKey, true);
+                const pointsAtLocation = getPointsAtLocation(point.lat, point.lon);
+                const mainPoint = pointsAtLocation[0];
+                const isSelected = selectedPointIds.has(mainPoint.id);
+                const orderNum = orderMap.get(mainPoint.id);
+                const color = getAgentColor(mainPoint.agent);
+                const agentCount = getAgentCountAtLocation(mainPoint.lat, mainPoint.lon);
+                const marker = createMarkerForPoint(mainPoint, isSelected, orderNum, color, agentCount);
+                marker.on('click', function(e) {
+                    // При клике выбирается конкретная точка mainPoint, а не все
+                    toggleSinglePointSelection(mainPoint.id);
+                });
+                marker.addTo(map);
+                markersLayer.push(marker);
+            }
+            updateSelectedUI();
+            updateAgentCountStats();
+        }
+        
+        window.toggleSinglePointSelection = function(id) {
+            const point = allPoints.find(p => p.id === id);
+            if (!point) return;
+            if (selectedPointIds.has(id)) {
+                selectedPointIds.delete(id);
+                showToast(`❌ Удалено: ${point.name}`, '#f44336', 1200);
+            } else {
+                selectedPointIds.add(id);
+                showToast(`✅ Добавлено: ${point.name}`, '#4CAF50', 1200);
+            }
+            optimizedOrderIds = [];
+            if (routePolyline) map.removeLayer(routePolyline);
+            document.getElementById('routeDistancePanel').style.display = 'none';
+            const preview = document.getElementById('orderPreviewDynamic');
+            if (preview) preview.remove();
+            if (showOnlySelectedMode && selectedPointIds.size === 0) { 
+                showOnlySelectedMode = false; 
+                document.getElementById('showAllPointsBtn').style.display = 'none'; 
+            }
+            redrawMarkers();
+        };
+        
+        function updateSelectedUI() {
+            const selected = allPoints.filter(p => selectedPointIds.has(p.id));
+            document.getElementById('selectedCount').innerText = selected.length;
+            const container = document.getElementById('selectedPointsList');
+            if (!selected.length) { 
+                container.innerHTML = '<div style="text-align:center; color:#999; padding:8px;">✨ Клик по маркеру или Shift+область</div>'; 
+                return; 
+            }
+            let html = '';
+            selected.slice(0, 15).forEach(p => { 
+                html += `<div class="point-item">
+                    <span>📍 ${escapeHtml(p.name)} (${escapeHtml(p.agent)})</span>
+                    <button onclick="toggleSinglePointSelection('${p.id}')" style="background:#f0f2f5; border:1px solid #ddd; padding:2px 10px; border-radius:20px; cursor:pointer;">✖</button>
+                </div>`; 
+            });
+            if (selected.length > 15) html += `<div style="text-align:center; padding:4px;">+ ещё ${selected.length-15}</div>`;
+            container.innerHTML = html;
+        }
+        
+        async function buildAndDrawRoute() {
+            if (!selectedPointIds.size) { alert("⚠️ Выберите точки на карте"); return; }
+            showOnlySelectedMode = true;
+            document.getElementById('showAllPointsBtn').style.display = 'inline-flex';
+            const selected = allPoints.filter(p => selectedPointIds.has(p.id));
+            if (selected.length === 0) return;
+            const uniquePointsMap = new Map();
+            selected.forEach(p => {
+                const key = `${p.lat.toFixed(6)},${p.lon.toFixed(6)}`;
+                if (!uniquePointsMap.has(key)) uniquePointsMap.set(key, p);
+            });
+            const uniquePoints = Array.from(uniquePointsMap.values());
+            let startPoint = null;
+            let minDist = Infinity;
+            for (const point of uniquePoints) {
+                const dist = haversineKm(WAREHOUSE.lat, WAREHOUSE.lon, point.lat, point.lon);
+                if (dist < minDist) { minDist = dist; startPoint = point; }
+            }
+            const otherPoints = uniquePoints.filter(p => p.id !== startPoint.id);
+            otherPoints.sort((a, b) => {
+                const distA = haversineKm(startPoint.lat, startPoint.lon, a.lat, a.lon);
+                const distB = haversineKm(startPoint.lat, startPoint.lon, b.lat, b.lon);
+                return distA - distB;
+            });
+            const orderedPoints = [startPoint, ...otherPoints];
+            optimizedOrderIds = orderedPoints.map(p => p.id);
+            redrawMarkers();
+            const routePoints = orderedPoints;
+            document.getElementById('routeStatus').innerHTML = '<i class="fas fa-spinner fa-pulse"></i> Строим маршрут...';
+            const coords = routePoints.map(p => `${p.lon},${p.lat}`).join(';');
+            try {
+                const resp = await fetch(`https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson`);
+                if (routePolyline) map.removeLayer(routePolyline);
+                if (resp.ok) {
+                    const data = await resp.json();
+                    if (data.routes?.[0]) {
+                        const latlngs = data.routes[0].geometry.coordinates.map(c => [c[1], c[0]]);
+                        routePolyline = L.polyline(latlngs, { color: '#FF7700', weight: 5 }).addTo(map);
+                        map.fitBounds(routePolyline.getBounds());
+                        const dist = (data.routes[0].distance / 1000).toFixed(1);
+                        document.getElementById('routeDistanceValue').innerHTML = `${dist} км <span style="font-size:9px;">(по дорогам)</span>`;
+                        document.getElementById('routeDistancePanel').style.display = 'flex';
+                        document.getElementById('routeStatus').innerHTML = `✅ Маршрут готов (${orderedPoints.length} точек)`;
+                    } else throw new Error();
+                } else throw new Error();
+            } catch(e) {
+                const direct = routePoints.map(p => [p.lat, p.lon]);
+                routePolyline = L.polyline(direct, { color: '#ffaa55', weight: 3, dashArray: '6,6' }).addTo(map);
+                map.fitBounds(L.latLngBounds(direct));
+                let dist = 0;
+                for (let i=0; i<direct.length-1; i++) dist += haversineKm(direct[i][0], direct[i][1], direct[i+1][0], direct[i+1][1]);
+                document.getElementById('routeDistanceValue').innerHTML = `${dist.toFixed(1)} км <span style="font-size:9px;">(по прямой)</span>`;
+                document.getElementById('routeDistancePanel').style.display = 'flex';
+                document.getElementById('routeStatus').innerHTML = `⚠️ Прямые линии (маршрут через API временно недоступен)`;
+            }
+            let preview = document.getElementById('orderPreviewDynamic');
+            if (preview) preview.remove();
+            preview = document.createElement('div'); preview.id = 'orderPreviewDynamic'; preview.className = 'order-preview-block';
+            let html = '<i class="fas fa-list-ol"></i> <strong>Порядок объезда:</strong><br>';
+            for (let i = 0; i < orderedPoints.length; i++) {
+                html += `<span style="background:#ff9800; width:22px; display:inline-block; text-align:center; border-radius:20px; margin-right:8px; color:white;">${i+1}</span> ${escapeHtml(orderedPoints[i].name)}<br>`;
+            }
+            preview.innerHTML = html;
+            document.querySelector('.selected-panel').after(preview);
+        }
+        
+        // -------------------- Загрузка CSV с дедупликацией --------------------
+        function parseCSVAndLoad(text) {
+            const lines = text.trim().split(/\r?\n/);
+            if (lines.length < 2) { alert("Формат: Название;Агент;Широта;Долгота"); return; }
+            const uniqueMap = new Map();
+            const agents = {};
+            for (let i = 1; i < lines.length; i++) {
+                const parts = lines[i].split(';');
+                if (parts.length < 4) continue;
+                let name = parts[0].replace(/^"|"$/g, '').trim();
+                let agent = parts[1].replace(/^"|"$/g, '').trim() || "Без агента";
+                let lat = parseFloat(parts[2].replace(',', '.').trim());
+                let lon = parseFloat(parts[3].replace(',', '.').trim());
+                if (isNaN(lat) || isNaN(lon)) continue;
+                const key = `${lat.toFixed(6)}|${lon.toFixed(6)}|${name}|${agent}`;
+                if (!uniqueMap.has(key)) {
+                    const id = 'p_' + Date.now() + '_' + i + '_' + Math.random();
+                    uniqueMap.set(key, { id, name, agent, lat, lon });
+                    agents[agent] = (agents[agent] || 0) + 1;
+                }
+            }
+            const points = Array.from(uniqueMap.values());
+            if (!points.length) { alert("Нет корректных координат"); return; }
+            allPoints = points;
+            selectedPointIds.clear();
+            optimizedOrderIds = [];
+            if (routePolyline) map.removeLayer(routePolyline);
+            agentFilterSet.clear();
+            agentColorMap = {};
+            showOnlySelectedMode = false;
+            agentCountFilterActive = false;
+            document.getElementById('agentCountOperator').value = 'gte';
+            document.getElementById('agentCountValue').value = 2;
+            document.getElementById('showAllPointsBtn').style.display = 'none';
+            updateAgentFilterUI(agents);
+            pointsCountCache.clear();
+            redrawMarkers();
+            document.getElementById('statsInfo').innerHTML = `✅ Загружено ${allPoints.length} уникальных контрагентов`;
+            document.getElementById('agentCountFilterBlock').style.display = 'block';
+        }
+        
+        function updateAgentFilterUI(agents) {
+            const container = document.getElementById('agentListContainer');
+            container.innerHTML = '';
+            const sorted = Object.keys(agents).sort();
+            if (!sorted.length) { document.getElementById('agentFilterBlock').style.display = 'none'; return; }
+            document.getElementById('agentFilterBlock').style.display = 'block';
+            sorted.forEach(ag => {
+                const color = getAgentColor(ag);
+                const div = document.createElement('div'); div.className = 'agent-item';
+                const chk = document.createElement('input'); chk.type = 'checkbox'; chk.value = ag;
+                chk.onchange = (e) => { 
+                    if (e.target.checked) agentFilterSet.add(ag);
+                    else agentFilterSet.delete(ag);
+                    if (!showOnlySelectedMode) redrawMarkers();
+                };
+                const label = document.createElement('label'); label.innerText = `${ag} (${agents[ag]})`;
+                const dot = document.createElement('span'); dot.className = 'color-dot'; dot.style.backgroundColor = color;
+                div.appendChild(chk); div.appendChild(label); div.appendChild(dot);
+                container.appendChild(div);
+            });
+        }
+        
+        function applyAgentCountFilter() {
+            agentCountOperator = document.getElementById('agentCountOperator').value;
+            agentCountValue = parseInt(document.getElementById('agentCountValue').value, 10);
+            if (isNaN(agentCountValue) || agentCountValue < 1) { alert('Введите корректное значение (минимум 1)'); return; }
+            agentCountFilterActive = true;
+            redrawMarkers();
+            showToast(`🔍 Фильтр: показываем точки с количеством агентов ${agentCountOperator} ${agentCountValue}`, '#2196F3', 2500);
+        }
+        
+        function resetAgentCountFilter() {
+            agentCountFilterActive = false;
+            agentCountOperator = 'gte';
+            agentCountValue = 2;
+            document.getElementById('agentCountOperator').value = 'gte';
+            document.getElementById('agentCountValue').value = 2;
+            redrawMarkers();
+            showToast(`🔍 Фильтр по количеству агентов сброшен`, '#4caf50', 2000);
+        }
+        
+        function clearAll() {
+            allPoints = []; selectedPointIds.clear(); optimizedOrderIds = []; agentFilterSet.clear(); agentColorMap = {};
+            pointsCountCache.clear();
+            agentCountFilterActive = false;
+            if (routePolyline) map.removeLayer(routePolyline);
+            markersLayer.forEach(m => map.removeLayer(m)); markersLayer = [];
+            if (editingDistrictId) cancelEditing();
+            document.getElementById('agentFilterBlock').style.display = 'none';
+            document.getElementById('agentCountFilterBlock').style.display = 'none';
+            document.getElementById('selectedPointsList').innerHTML = '<div style="text-align:center; padding:8px;">✨ Выберите точки</div>';
+            document.getElementById('selectedCount').innerText = '0';
+            document.getElementById('statsInfo').innerHTML = '📊 Данные очищены';
+            document.getElementById('routeDistancePanel').style.display = 'none';
+            document.getElementById('csvFileInput').value = '';
+            showOnlySelectedMode = false;
+            document.getElementById('showAllPointsBtn').style.display = 'none';
+            clearSearch();
+        }
+        
+        function invertSelection() {
+            let targets = showOnlySelectedMode ? allPoints.filter(p => selectedPointIds.has(p.id)) : getFilteredPointsForDisplay();
+            targets.forEach(p => { 
+                if (selectedPointIds.has(p.id)) selectedPointIds.delete(p.id);
+                else selectedPointIds.add(p.id);
+            });
+            optimizedOrderIds = [];
+            if (routePolyline) map.removeLayer(routePolyline);
+            document.getElementById('routeDistancePanel').style.display = 'none';
+            document.getElementById('orderPreviewDynamic')?.remove();
+            if (showOnlySelectedMode && !selectedPointIds.size) { showOnlySelectedMode = false; document.getElementById('showAllPointsBtn').style.display = 'none'; }
+            redrawMarkers();
+        }
+        
+        function showAllPoints() { showOnlySelectedMode = false; document.getElementById('showAllPointsBtn').style.display = 'none'; redrawMarkers(); }
+        function resetFilter() { document.querySelectorAll('#agentListContainer input').forEach(cb => cb.checked = false); agentFilterSet.clear(); if (!showOnlySelectedMode) redrawMarkers(); }
+        function selectAllAgents() { document.querySelectorAll('#agentListContainer input').forEach(cb => { cb.checked = true; agentFilterSet.add(cb.value); }); if (!showOnlySelectedMode) redrawMarkers(); }
+        function escapeHtml(str) { return String(str || '').replace(/[&<>]/g, m => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;' })[m]); }
+        
+        document.addEventListener('DOMContentLoaded', () => {
+            initMap();
+            const searchInput = document.getElementById('searchInput');
+            const searchBtn = document.getElementById('searchBtn');
+            const clearSearchBtn = document.getElementById('clearSearchBtn');
+            searchBtn.onclick = () => searchPoints(searchInput.value);
+            clearSearchBtn.onclick = () => clearSearch();
+            searchInput.onkeypress = (e) => { if (e.key === 'Enter') searchPoints(searchInput.value); };
+            searchInput.oninput = () => { if (searchInput.value === '') hideSearchResults(); };
+            document.addEventListener('click', function(e) { if (!e.target.closest('.search-section')) hideSearchResults(); });
+            document.getElementById('csvFileInput').onchange = e => { if(e.target.files[0]) { const r = new FileReader(); r.onload = ev => parseCSVAndLoad(ev.target.result); r.readAsText(e.target.files[0], 'UTF-8'); } };
+            document.getElementById('clearAllBtn').onclick = clearAll;
+            document.getElementById('resetFilterBtn').onclick = resetFilter;
+            document.getElementById('selectAllAgentsBtn').onclick = selectAllAgents;
+            document.getElementById('invertSelectionBtn').onclick = invertSelection;
+            document.getElementById('buildRouteBtn').onclick = buildAndDrawRoute;
+            document.getElementById('clearSelectionBtn').onclick = () => { selectedPointIds.clear(); optimizedOrderIds = []; if (routePolyline) map.removeLayer(routePolyline); document.getElementById('routeDistancePanel').style.display = 'none'; document.getElementById('orderPreviewDynamic')?.remove(); if (showOnlySelectedMode) { showOnlySelectedMode = false; document.getElementById('showAllPointsBtn').style.display = 'none'; } redrawMarkers(); };
+            document.getElementById('showAllPointsBtn').onclick = showAllPoints;
+            document.getElementById('drawPolygonBtn').onclick = startDrawMode;
+            document.getElementById('exportBtn').onclick = exportDistricts;
+            document.getElementById('importFileInput').onchange = e => { if(e.target.files[0]) importDistricts(e.target.files[0]); e.target.value = ''; };
+            document.getElementById('applyAgentCountFilter').onclick = applyAgentCountFilter;
+            document.getElementById('resetAgentCountBtn').onclick = resetAgentCountFilter;
+        });
+    })();
+</script>
+</body>
+</html>
