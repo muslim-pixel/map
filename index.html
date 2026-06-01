@@ -1077,7 +1077,9 @@
             if (lines.length < 2) { alert("Формат: Название;Агент;Широта;Долгота"); return; }
             const uniqueMap = new Map();
             const agents = {};
-            for (let i = 1; i < lines.length; i++) {
+            // Пропускаем первую строку, если она похожа на заголовок (можно автоматически определить)
+            const startIndex = (lines[0].toLowerCase().includes('название') || lines[0].toLowerCase().includes('агент')) ? 1 : 0;
+            for (let i = startIndex; i < lines.length; i++) {
                 const parts = lines[i].split(';');
                 if (parts.length < 4) continue;
                 let name = parts[0].replace(/^"|"$/g, '').trim();
@@ -1191,6 +1193,20 @@
         function selectAllAgents() { document.querySelectorAll('#agentListContainer input').forEach(cb => { cb.checked = true; agentFilterSet.add(cb.value); }); if (!showOnlySelectedMode) redrawMarkers(); }
         function escapeHtml(str) { return String(str || '').replace(/[&<>]/g, m => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;' })[m]); }
         
+        // ========== НОВАЯ ФУНКЦИЯ ДЛЯ АВТОМАТИЧЕСКОЙ ЗАГРУЗКИ ==========
+        async function loadDefaultCSV() {
+            try {
+                const response = await fetch('contractors_with_sales.csv');
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                const text = await response.text();
+                parseCSVAndLoad(text);
+                console.log('✅ Данные автоматически загружены из contractors_with_sales.csv');
+            } catch (err) {
+                console.warn('❌ Не удалось загрузить CSV по умолчанию:', err);
+                document.getElementById('statsInfo').innerHTML = '⚠️ Не найден файл contractors_with_sales.csv. Загрузите его вручную.';
+            }
+        }
+        
         document.addEventListener('DOMContentLoaded', () => {
             initMap();
             const searchInput = document.getElementById('searchInput');
@@ -1214,6 +1230,9 @@
             document.getElementById('importFileInput').onchange = e => { if(e.target.files[0]) importDistricts(e.target.files[0]); e.target.value = ''; };
             document.getElementById('applyAgentCountFilter').onclick = applyAgentCountFilter;
             document.getElementById('resetAgentCountBtn').onclick = resetAgentCountFilter;
+            
+            // ★★★ АВТОМАТИЧЕСКАЯ ЗАГРУЗКА CSV ПРИ СТАРТЕ ★★★
+            loadDefaultCSV();
         });
     })();
 </script>
